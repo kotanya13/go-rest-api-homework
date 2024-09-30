@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -60,29 +59,24 @@ func getAllTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 // 2 обработчик
-func postNewTask(w http.ResponseWriter, r *http.Request) {
+func addTask(w http.ResponseWriter, r *http.Request) {
 	var task Task
-	var buf bytes.Buffer
-
-	_, err := buf.ReadFrom(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
 		return
 	}
-
-	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	// прверка, существует ли задача с таким ID
+	if _, ok := tasks[task.ID]; ok {
+		http.Error(w, "Задача с таким ID уже существует", http.StatusBadRequest)
 		return
 	}
-
 	tasks[task.ID] = task
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 }
 
 // 3 обработчик
-func getCertainTask(w http.ResponseWriter, r *http.Request) {
+func getTask(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	task, ok := tasks[id]
 	if !ok {
@@ -109,11 +103,6 @@ func deleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	delete(tasks, id)
-
-	resp := map[string]string{"message": "Задача успешно удалена"}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp) // Возвращаем сообщение об успешном удалении
 }
 
 func main() {
@@ -121,8 +110,8 @@ func main() {
 
 	// здесь регистрируйте ваши обработчики
 	r.Get("/tasks", getAllTasks)
-	r.Post("/tasks", postNewTask)
-	r.Get("/tasks/{id}", getCertainTask)
+	r.Post("/tasks", addTask)
+	r.Get("/tasks/{id}", getTask)
 	r.Delete("/tasks/{id}", deleteTask)
 
 	if err := http.ListenAndServe(":8080", r); err != nil {
